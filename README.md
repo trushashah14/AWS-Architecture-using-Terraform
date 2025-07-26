@@ -7,7 +7,9 @@ This project provisions a simple cloud infrastructure on AWS using Terraform. It
 ## ✅ What It Sets Up
 
 - Custom Virtual Private Cloud (VPC)
-- Public subnet with internet access
+- Public subnets across multiple Availability Zones
+- Dedicated NAT Gateway in each public subnet for high availability
+- Private subnets with outbound access via their AZ’s NAT
 - Internet Gateway and routing
 - Security Groups for ALB and EC2
 - Application Load Balancer (ALB)
@@ -111,4 +113,4 @@ terraform destroy
 
 ---
 
-# The same Architecture is build through AWS UI , refer this document for the steps 
+# The same Architecture is build through AWS UI , refer this [document](https://docs.google.com/document/d/16x2zFxIRKabWw7mMnTvIER3ZO6jFdwp2rZwswtEyLZ8/edit?tab=t.0) for the steps 

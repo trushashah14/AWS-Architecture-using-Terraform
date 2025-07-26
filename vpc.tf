@@ -73,39 +73,42 @@ resource "aws_route_table_association" "public_subnet_association" {
 }
 
 // ------------------ 8. Allocate Elastic IP for NAT Gateway ------------------
-resource "aws_eip" "eip" {
-  domain     = "vpc"                               // VPC-specific EIP allocation (not EC2-Classic)
-  depends_on = [aws_internet_gateway.igw_vpc]      // Ensure IGW is created before requesting EIP
+resource "aws_eip" "nat_eip" {
+  count  = length(var.vpc_availability_zones)
+  domain = "vpc"
+  depends_on = [aws_internet_gateway.igw_vpc]
 }
 
 // ------------------ 9. Create NAT Gateway ------------------
-resource "aws_nat_gateway" "aws-prod-nat-gateway" {
-  subnet_id     = element(aws_subnet.private_subnet[*].id, 0)
-  // Place NAT Gateway in the first private subnet -- typically best practice is to put it in a public subnet, but your doc sets it here
-  allocation_id = aws_eip.eip.id                   // Use the allocated Elastic IP
-  depends_on    = [aws_internet_gateway.igw_vpc]   // Ensure IGW is provisioned first
+resource "aws_nat_gateway" "nat_gw" {
+  count         = length(var.vpc_availability_zones)
+  allocation_id = aws_eip.nat_eip[count.index].id
+  subnet_id     = aws_subnet.public_subnet[count.index].id  // Place in public subnet per AZ
+  depends_on    = [aws_internet_gateway.igw_vpc]
   tags = {
-    Name = "AWS-Prod-Nat Gateway"
+    Name = "AWS-Prod NAT Gateway ${count.index + 1}"
   }
 }
 
 // ------------------ 10. Create Route Table for Private Subnets ------------------
-resource "aws_route_table" "aws_prod_route_table_private_subnet" {
+resource "aws_route_table" "private_rt" {
+  count  = length(var.vpc_availability_zones)
   vpc_id = aws_vpc.custom_vpc.id
+
   route {
-    cidr_block = "0.0.0.0/0"                         // Allow outbound traffic
-    gateway_id = aws_nat_gateway.aws-prod-nat-gateway.id  // Route through NAT Gateway instead of IGW
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_nat_gateway.nat_gw[count.index].id
   }
-  depends_on = [aws_nat_gateway.aws-prod-nat-gateway]     // Wait for NAT creation before this
+
+  depends_on = [aws_nat_gateway.nat_gw]
   tags = {
-    Name = "Private subnet Route Table"
+    Name = "Private Subnet Route Table ${count.index + 1}"
   }
 }
 
 // ------------------ 11. Associate Route Table with Private Subnets ------------------
-resource "aws_route_table_association" "private_subnet_association" {
-  route_table_id = aws_route_table.aws_prod_route_table_private_subnet.id
-  count          = length(var.vpc_availability_zones)     // One association per subnet
-  subnet_id      = element(aws_subnet.private_subnet[*].id, count.index)
-  // Attach route table to each private subnet to enable outbound access via NAT
+resource "aws_route_table_association" "private_subnet_assoc" {
+  count          = length(var.vpc_availability_zones)
+  subnet_id      = aws_subnet.private_subnet[count.index].id
+  route_table_id = aws_route_table.private_rt[count.index].id
 }
